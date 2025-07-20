@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UPLOAD FILE</title>
+    <style>
+        *{
+            margin: 0;
+            padding: 0;
+        }
+        body{
+            width: 100%;
+            height: 100%;
+            position: fixed;
+            top: 0;
+            left: 0;
+            background: #222;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .body{
+            width: 50%;
+            height: auto;
+            position: relative;
+            padding: 12px;
+            background: #fff;
+            border-radius: 5px;
+        }
+        .card{
+            width: 100%;
+            height: 300px;
+            position: relative;
+            border: 1px dashed #ddd;
+            border-radius: 5px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .message_box{
+            width: 100%;
+            height: 30px;
+            border-radius: 3px;
+        }
+        .proresse_barre{
+            width: 100%;
+            margin-top: 12px;
+            border: solid #bbb 1px;
+            border-radius: 3px;
+            height: 20px;
+            position: relative;
+        }
+        .proresse_barre .label{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 2;
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 100%;
+        }
+        .proresse_barre .line{
+            height: 100%; 
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 0%;
+            background: limegreen;
+        }
+        .card .update-file{
+            position: absolute;
+            top: 3px;
+            right: 3px;
+            border-radius: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 30px;
+            width: auto;
+            padding: 6px 12px;
+            background: #000;
+            color: #fff;
+            z-index:12;
+        }
+        .card p{
+            color: #bbb;
+            font-size: 20px;
+
+        }
+        .card input[type="file"]{
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            cursor: pointer;
+            opacity: 0;
+            z-index: 3;
+        }
+        .card video{
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            position: absolute;
+            top: 0;
+            left: 0;
+            background-color: #111;
+
+        }
+        .button{
+            width: 100%;
+            height: auto;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .button button {
+            width: 100%;
+            height: 40px;
+            border-radius: 5px;
+            background-color: #2691dd;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border-color: #fff;
+            margin-top: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="body">
+        <div class="message_box" id="message-box"></div>
+        <div class="card">
+            <div class="update-file" id="update">
+                <span>update</span>
+                <input type="file" id="input-update" accept=".mp4,.avi">
+            </div>
+            <p>Selectionnez une video</p>
+            <input type="file" id="input" accept=".mp4,.avi">
+            <video src="" id="video" controls type="type/mp4"></video>
+        </div>
+        <div id="progress" class="proresse_barre">
+            <div class="label">
+                <span class="title">Evolution</span>
+                <span class="percent"></span>
+            </div>
+            <div class="line"></div>
+        </div>
+        <div class="button">
+            <button type="submit">Uploader</button>
+        </div>
+    </div>
+    <script>    
+        let file=null
+        const input=document.getElementById("input")
+        const video=document.getElementById("video")
+        const update=document.getElementById("update")
+        const button=document.querySelector("button")
+        const message_box=document.getElementById("message-box")
+        const progress_barre=document.getElementById("progress")
+
+        const chunck_size=1024*1024
+        if(!file){
+            video.style.display='none'
+            update.style.display='none'
+            progress_barre.style.display="none"
+            message_box.style.display="none"
+        }
+
+        const sendChunck= async (chunck,i,filename,total_chunck)=>{
+            const formData=new FormData()
+            formData.append("file",chunck)
+            formData.append("chunk_index",i)
+            formData.append("total_chunks",total_chunck)
+            formData.append("filename",filename)
+
+            try {
+                const res= await fetch("http://localhost:8000/upload-chunk/",{
+                    method:"POST",
+                    body:formData
+                });
+                const result=await res.json()
+                if(result.status){
+                    if(result.status=="COMPLETE"){
+                        message_box.style.background="#06de6710"
+                        message_box.style.color="#058e30"
+                        message_box.innerHTML="Upload terminer"
+                        message_box.style.display="block"
+                        setTimeout(()=>{
+                            progress_barre.style.display="none"
+                        },1000)
+                    }else{
+                        message_box.style.background="#e9393910"
+                        message_box.style.color="#e93939"
+                        message_box.innerHTML=result.message
+                        message_box.style.display="block"
+                    }
+                    setTimeout(()=>{
+                        message_box.style.display="none"
+                    },3000)
+                }
+                console.log(result)
+            } catch (error) {
+                console.error(error)
+            }
+        }
+
+        const upload_file= async (file,progress_barre)=>{
+            const total_chunk=Math.ceil(file.size/chunck_size)
+            const line=progress_barre.querySelector(".line")
+            const percent=progress_barre.querySelector(".percent")
+            let proress_indicator=0
+            for(let i=0; i<total_chunk; i++){
+                const chunck=file.slice(i*chunck_size, (i+1)*chunck_size)
+                await sendChunck(chunck,i,file.name,total_chunk)
+                if (line){
+                    proress_indicator=(i+1)*100/total_chunk
+                    line.style.width=proress_indicator +"%"
+                    percent.innerHTML=`${proress_indicator}%`
+                }
+            }
+        }
+
+        
+        /**
+         * apercus du fichier
+        */
+        const process_file=(file)=>{
+            if (file instanceof File){
+                const reader=new FileReader()
+                
+                reader.onloadend=(event)=>{
+                    const base64=event.target.result
+                    video.src=base64
+                }
+
+                reader.onerror=error=>{
+                    console.log(error)
+                }
+
+                reader.readAsDataURL(file)
+            }
+        }
+
+        function selectFileAndUploadFile(){
+            input.addEventListener("change",e=>{
+                file=e.target.files.item(0)
+                video.style.display="block"
+                update.style.display="block"
+                process_file(file)
+                input.style.display="none"
+            })
+
+            document.getElementById("input-update").addEventListener("change",e=>{
+                file=e.target.files.item(0)
+                process_file(file)
+            })
+
+            button.addEventListener("click", async ()=>{
+                progress_barre.style.display="block"
+                await upload_file(file,progress_barre)
+            })
+            
+        }
+
+        window.addEventListener("DOMContentLoaded",()=>{
+            selectFileAndUploadFile()
+        })
+    </script>
+</body>
+</html>
