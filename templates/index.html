@@ -132,6 +132,14 @@
             border-color: #fff;
             margin-top: 12px;
         }
+        .media-info{
+            width: 100%;
+            height: auto;
+            position: relative;
+        }
+        .media-info h3{
+            text-align: justify;
+        }
     </style>
 </head>
 <body>
@@ -145,6 +153,10 @@
             <p>Selectionnez une video</p>
             <input type="file" id="input" accept=".mp4,.avi">
             <video src="" id="video" controls type="type/mp4"></video>
+        </div>
+        <div class="media-info" id="infos-media">
+            <h3></h3>
+            <p></p>
         </div>
         <div id="progress" class="proresse_barre">
             <div class="label">
@@ -165,6 +177,7 @@
         const button=document.querySelector("button")
         const message_box=document.getElementById("message-box")
         const progress_barre=document.getElementById("progress")
+        const media_infos=document.getElementById("infos-media")
 
         const chunck_size=1024*1024
         if(!file){
@@ -172,6 +185,7 @@
             update.style.display='none'
             progress_barre.style.display="none"
             message_box.style.display="none"
+            media_infos.style.display="none"
         }
 
         const sendChunck= async (chunck,i,filename,total_chunck)=>{
@@ -195,6 +209,7 @@
                         message_box.style.display="block"
                         setTimeout(()=>{
                             progress_barre.style.display="none"
+                            progress_barre.querySelector(".line").style.width=0+"%"
                         },1000)
                     }else{
                         message_box.style.background="#e9393910"
@@ -248,24 +263,32 @@
             }
         }
 
+        const select_file=(e)=>{
+            file=e.target.files.item(0)
+            video.style.display="block"
+            update.style.display="block"
+            media_infos.style.display="block"
+            process_file(file)
+            media_infos.querySelector("h3").innerHTML=file.name
+            media_infos.querySelector("p").innerHTML=`Taille: ${(file.size/(1024*1024)).toFixed(2)} Mo`
+            input.style.display="none"
+        }
+
         function selectFileAndUploadFile(){
             input.addEventListener("change",e=>{
-                file=e.target.files.item(0)
-                video.style.display="block"
-                update.style.display="block"
-                process_file(file)
-                input.style.display="none"
+                select_file(e)
             })
 
-            document.getElementById("input-update").addEventListener("change",e=>{
-                file=e.target.files.item(0)
-                process_file(file)
+            document.getElementById("input-update").addEventListener("change",e=>{file=e.target.files.item(0)
+                select_file(e)
             })
 
-            button.addEventListener("click", async ()=>{
-                progress_barre.style.display="block"
-                await upload_file(file,progress_barre)
-            })
+            if(file){
+                button.addEventListener("click", async ()=>{
+                    progress_barre.style.display="block"
+                    await upload_file(file,progress_barre)
+                })
+            }
             
         }
 
