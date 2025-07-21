@@ -43,6 +43,9 @@
             width: 100%;
             height: 30px;
             border-radius: 3px;
+            padding: 5px;
+            text-align: center;
+            font-weight: bold;
         }
         .proresse_barre{
             width: 100%;
@@ -62,6 +65,7 @@
             left: 0;
             height: 100%;
             width: 100%;
+            padding: 0 8px;
         }
         .proresse_barre .line{
             height: 100%; 
@@ -70,6 +74,7 @@
             left: 0;
             width: 0%;
             background: limegreen;
+            transition: width 0.3s ease;
         }
         .card .update-file{
             position: absolute;
@@ -89,7 +94,6 @@
         .card p{
             color: #bbb;
             font-size: 20px;
-
         }
         .card input[type="file"]{
             width: 100%;
@@ -109,7 +113,6 @@
             top: 0;
             left: 0;
             background-color: #111;
-
         }
         .button{
             width: 100%;
@@ -129,13 +132,22 @@
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            border-color: #fff;
+            border: none;
             margin-top: 12px;
+            font-size: 16px;
+        }
+        .button button:hover {
+            background-color: #1e7bb8;
+        }
+        .button button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
         }
         .media-info{
             width: 100%;
             height: auto;
             position: relative;
+            margin-top: 12px;
         }
         .media-info h3{
             text-align: justify;
@@ -150,9 +162,9 @@
                 <span>update</span>
                 <input type="file" id="input-update" accept=".mp4,.avi">
             </div>
-            <p>Selectionnez une video</p>
+            <p>Sélectionnez une vidéo</p>
             <input type="file" id="input" accept=".mp4,.avi">
-            <video src="" id="video" controls type="type/mp4"></video>
+            <video src="" id="video" controls type="video/mp4"></video>
         </div>
         <div class="media-info" id="infos-media">
             <h3></h3>
@@ -160,141 +172,227 @@
         </div>
         <div id="progress" class="proresse_barre">
             <div class="label">
-                <span class="title">Evolution</span>
-                <span class="percent"></span>
+                <span class="title">Évolution</span>
+                <span class="percent">0%</span>
             </div>
             <div class="line"></div>
         </div>
         <div class="button">
-            <button type="submit">Uploader</button>
+            <button type="button" id="upload-btn">Uploader</button>
         </div>
     </div>
     <script>    
-        let file=null
-        const input=document.getElementById("input")
-        const video=document.getElementById("video")
-        const update=document.getElementById("update")
-        const button=document.querySelector("button")
-        const message_box=document.getElementById("message-box")
-        const progress_barre=document.getElementById("progress")
-        const media_infos=document.getElementById("infos-media")
-
-        const chunck_size=1024*1024
-        if(!file){
-            video.style.display='none'
-            update.style.display='none'
-            progress_barre.style.display="none"
-            message_box.style.display="none"
-            media_infos.style.display="none"
-        }
-
-        const sendChunck= async (chunck,i,filename,total_chunck)=>{
-            const formData=new FormData()
-            formData.append("file",chunck)
-            formData.append("chunk_index",i)
-            formData.append("total_chunks",total_chunck)
-            formData.append("filename",filename)
-
-            try {
-                const res= await fetch("http://localhost:9000/upload-chunk/",{
-                    method:"POST",
-                    body:formData
-                });
-                const result=await res.json()
-                if(result.status){
-                    if(result.status=="COMPLETE"){
-                        message_box.style.background="#06de6710"
-                        message_box.style.color="#058e30"
-                        message_box.innerHTML="Upload terminer"
-                        message_box.style.display="block"
-                        setTimeout(()=>{
-                            progress_barre.style.display="none"
-                            progress_barre.querySelector(".line").style.width=0+"%"
-                        },1000)
-                    }else{
-                        message_box.style.background="#e9393910"
-                        message_box.style.color="#e93939"
-                        message_box.innerHTML=result.message
-                        message_box.style.display="block"
-                    }
-                    setTimeout(()=>{
-                        message_box.style.display="none"
-                    },3000)
-                }
-            } catch (error) {
-                console.error(error)
-            }
-        }
-
-        const upload_file= async (file,progress_barre)=>{
-            const total_chunk=Math.ceil(file.size/chunck_size)
-            const line=progress_barre.querySelector(".line")
-            const percent=progress_barre.querySelector(".percent")
-            let proress_indicator=0
-            for(let i=0; i<total_chunk; i++){
-                const chunck=file.slice(i*chunck_size, (i+1)*chunck_size)
-                await sendChunck(chunck,i,file.name,total_chunk)
-                if (line){
-                    proress_indicator=(i+1)*100/total_chunk
-                    line.style.width=proress_indicator +"%"
-                    percent.innerHTML=`${proress_indicator}%`
-                }
-            }
-        }
-
+        let file = null;
+        let isUploading = false;
         
-        /**
-         * apercus du fichier
-        */
-        const process_file=(file)=>{
-            if (file instanceof File){
-                const reader=new FileReader()
-                
-                reader.onloadend=(event)=>{
-                    const base64=event.target.result
-                    video.src=base64
-                }
+        const input = document.getElementById("input");
+        const video = document.getElementById("video");
+        const update = document.getElementById("update");
+        const button = document.getElementById("upload-btn");
+        const message_box = document.getElementById("message-box");
+        const progress_barre = document.getElementById("progress");
+        const media_infos = document.getElementById("infos-media");
 
-                reader.onerror=error=>{
-                    console.log(error)
-                }
+        const chunck_size = 1024 * 1024; // 1MB
 
-                reader.readAsDataURL(file)
-            }
+        // Initialisation
+        if (!file) {
+            video.style.display = 'none';
+            update.style.display = 'none';
+            progress_barre.style.display = "none";
+            message_box.style.display = "none";
+            media_infos.style.display = "none";
         }
 
-        const select_file=(e)=>{
-            file=e.target.files.item(0)
-            video.style.display="block"
-            update.style.display="block"
-            media_infos.style.display="block"
-            process_file(file)
-            media_infos.querySelector("h3").innerHTML=file.name
-            media_infos.querySelector("p").innerHTML=`Taille: ${(file.size/(1024*1024)).toFixed(2)} Mo`
-            input.style.display="none"
-        }
-
-        function selectFileAndUploadFile(){
-            input.addEventListener("change",e=>{
-                select_file(e)
-            })
-
-            document.getElementById("input-update").addEventListener("change",e=>{file=e.target.files.item(0)
-                select_file(e)
-            })
-
-            if(file){
-                button.addEventListener("click", async ()=>{
-                    progress_barre.style.display="block"
-                    await upload_file(file,progress_barre)
-                })
-            }
+        // Fonction pour afficher les messages
+        const showMessage = (message, type = 'info') => {
+            message_box.style.display = "block";
+            message_box.innerHTML = message;
             
+            if (type === 'success') {
+                message_box.style.background = "#d4edda";
+                message_box.style.color = "#155724";
+                message_box.style.border = "1px solid #c3e6cb";
+            } else if (type === 'error') {
+                message_box.style.background = "#f8d7da";
+                message_box.style.color = "#721c24";
+                message_box.style.border = "1px solid #f5c6cb";
+            } else {
+                message_box.style.background = "#d1ecf1";
+                message_box.style.color = "#0c5460";
+                message_box.style.border = "1px solid #bee5eb";
+            }
+
+            // Masquer après 5 secondes sauf pour les succès
+            if (type !== 'success') {
+                setTimeout(() => {
+                    message_box.style.display = "none";
+                }, 5000);
+            }
+        };
+
+        // Fonction corrigée pour envoyer un chunk
+        const sendChunck = async (chunck, i, filename, total_chunck) => {
+            const formData = new FormData();
+            formData.append("file", chunck);
+            formData.append("chunk_index", i);
+            formData.append("total_chunks", total_chunck);
+            formData.append("filename", filename);
+            
+            try {
+                console.log(`Envoi du chunk ${i + 1}/${total_chunck} pour ${filename}`);
+                
+                const res = await fetch("http://173.212.239.116:8000/upload-chunk/", {
+                    method: "POST",
+                    body: formData
+                });
+
+                if (!res.ok) {
+                    throw new Error(`Erreur HTTP: ${res.status}`);
+                }
+
+                const result = await res.json();
+                console.log("Réponse du serveur:", result);
+
+                if (result.status === "COMPLETE") {
+                    showMessage("Upload terminé avec succès!", 'success');
+                    isUploading = false;
+                    button.disabled = false;
+                    button.innerHTML = "Uploader";
+                    
+                    setTimeout(() => {
+                        progress_barre.style.display = "none";
+                        progress_barre.querySelector(".line").style.width = "0%";
+                        progress_barre.querySelector(".percent").innerHTML = "0%";
+                    }, 2000);
+                } else if (result.status === "PROGRESS") {
+                    console.log(result.message);
+                }
+
+                return result;
+
+            } catch (error) {
+                console.error("Erreur lors de l'envoi du chunk:", error);
+                showMessage(`Erreur: ${error.message}`, 'error');
+                isUploading = false;
+                button.disabled = false;
+                button.innerHTML = "Uploader";
+                throw error;
+            }
+        };
+
+        // Fonction corrigée pour uploader le fichier
+        const upload_file = async (file, progress_barre) => {
+            if (!file) {
+                showMessage("Aucun fichier sélectionné", 'error');
+                return;
+            }
+
+            const total_chunk = Math.ceil(file.size / chunck_size);
+            const line = progress_barre.querySelector(".line");
+            const percent = progress_barre.querySelector(".percent");
+            
+            console.log(`Début upload: ${file.name} (${total_chunk} chunks)`);
+            
+            try {
+                progress_barre.style.display = "block";
+                showMessage(`Upload en cours... ${total_chunk} chunks à envoyer`, 'info');
+                
+                for (let i = 0; i < total_chunk; i++) {
+                    if (!isUploading) break; // Permettre l'annulation
+                    
+                    const chunck = file.slice(i * chunck_size, (i + 1) * chunck_size);
+                    await sendChunck(chunck, i, file.name, total_chunk);
+                    
+                    // Mise à jour de la barre de progression
+                    const progress_indicator = ((i + 1) * 100 / total_chunk);
+                    line.style.width = progress_indicator + "%";
+                    percent.innerHTML = `${Math.round(progress_indicator)}%`;
+                }
+                
+            } catch (error) {
+                console.error("Erreur pendant l'upload:", error);
+                showMessage("Erreur pendant l'upload", 'error');
+                progress_barre.style.display = "none";
+            }
+        };
+
+        // Fonction pour traiter l'aperçu du fichier
+        const process_file = (file) => {
+            if (file instanceof File) {
+                const reader = new FileReader();
+                
+                reader.onloadend = (event) => {
+                    const base64 = event.target.result;
+                    video.src = base64;
+                };
+
+                reader.onerror = error => {
+                    console.error("Erreur de lecture du fichier:", error);
+                    showMessage("Erreur lors de la lecture du fichier", 'error');
+                };
+
+                reader.readAsDataURL(file);
+            }
+        };
+
+        // Fonction pour sélectionner un fichier
+        const select_file = (e) => {
+            const selectedFile = e.target.files.item(0);
+            if (!selectedFile) return;
+
+            file = selectedFile;
+            video.style.display = "block";
+            update.style.display = "block";
+            media_infos.style.display = "block";
+            
+            const file_name = file.name;
+            process_file(file);
+            
+            media_infos.querySelector("h3").innerHTML = `${file_name}`.replace(/[_-]/g, " ");
+            media_infos.querySelector("p").innerHTML = `Taille: ${(file.size / (1024 * 1024)).toFixed(2)} MB`;
+            
+            input.style.display = "none";
+            showMessage("Fichier sélectionné avec succès", 'success');
+        };
+
+        // Fonction principale d'initialisation
+        function selectFileAndUploadFile() {
+            // Event listener pour la sélection initiale
+            input.addEventListener("change", e => {
+                select_file(e);
+            });
+
+            // Event listener pour le bouton update
+            document.getElementById("input-update").addEventListener("change", e => {
+                select_file(e);
+            });
+
+            // Event listener pour le bouton upload
+            button.addEventListener("click", async () => {
+                if (!file) {
+                    showMessage("Veuillez sélectionner un fichier", 'error');
+                    return;
+                }
+
+                if (isUploading) {
+                    showMessage("Upload déjà en cours...", 'info');
+                    return;
+                }
+
+                isUploading = true;
+                button.disabled = true;
+                button.innerHTML = "Upload en cours...";
+                
+                await upload_file(file, progress_barre);
+            });
         }
 
-        window.addEventListener("DOMContentLoaded",()=>{
-            selectFileAndUploadFile()
-        })
+        // Initialisation au chargement de la page
+        window.addEventListener("DOMContentLoaded", () => {
+            selectFileAndUploadFile();
+            console.log("Application initialisée");
+        });
     </script>
 </body>
 </html>
