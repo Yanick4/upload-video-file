@@ -182,7 +182,7 @@
             formData.append("filename",filename)
 
             try {
-                const res= await fetch("http://localhost:8000/upload-chunk/",{
+                const res= await fetch("http://localhost:9000/upload-chunk/",{
                     method:"POST",
                     body:formData
                 });
@@ -206,7 +206,6 @@
                         message_box.style.display="none"
                     },3000)
                 }
-                console.log(result)
             } catch (error) {
                 console.error(error)
             }
