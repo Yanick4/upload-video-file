@@ -16,9 +16,15 @@
             top: 0;
             left: 0;
             background: #222;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+        }
+        .main-card{
+            width: calc(100% - 60px);
+            height: calc(100% - 60px);
+            position: absolute;
+            top: 0;
+            left: 0;
+            overflow-y: scroll;
+            padding: 30px;
         }
         .body{
             width: 50%;
@@ -27,6 +33,8 @@
             padding: 12px;
             background: #fff;
             border-radius: 5px;
+            transform: translateX(-50%);
+            left:50%;
         }
         .card{
             width: 100%;
@@ -114,6 +122,21 @@
             left: 0;
             background-color: #111;
         }
+        .field_ep_number{
+            width: 100%;
+            height: 45px;
+            position: relative;
+            margin-top: 12px;
+
+        }
+        .field_ep_number input{
+            width: calc(100% - 36px);
+            height: 100%;
+            border-radius: 4px;
+            border: 1px solid grey;
+            outline-color: #2691dd;
+            padding-left: 36px;
+        }
         .button{
             width: 100%;
             height: auto;
@@ -155,35 +178,49 @@
     </style>
 </head>
 <body>
-    <div class="body">
-        <div class="message_box" id="message-box"></div>
-        <div class="card">
-            <div class="update-file" id="update">
-                <span>update</span>
-                <input type="file" id="input-update" accept=".mp4,.avi">
+    <div class="main-card">
+        <div class="body">
+            <div class="message_box" id="message-box"></div>
+            <div class="card">
+                <div class="update-file" id="update">
+                    <span>update</span>
+                    <input type="file" id="input-update" accept=".mp4,.avi">
+                </div>
+                <p>Sélectionnez une vidéo</p>
+                <input type="file" id="input" accept=".mp4,.avi">
+                <video src="" id="video" controls type="video/mp4"></video>
             </div>
-            <p>Sélectionnez une vidéo</p>
-            <input type="file" id="input" accept=".mp4,.avi">
-            <video src="" id="video" controls type="video/mp4"></video>
-        </div>
-        <div class="media-info" id="infos-media">
-            <h3></h3>
-            <p></p>
-        </div>
-        <div id="progress" class="proresse_barre">
-            <div class="label">
-                <span class="title">Évolution</span>
-                <span class="percent">0%</span>
+            <div class="media-info" id="infos-media">
+                <h3></h3>
+                <p></p>
             </div>
-            <div class="line"></div>
-        </div>
-        <div class="button">
-            <button type="button" id="upload-btn">Uploader</button>
+            <div id="progress" class="proresse_barre">
+                <div class="label">
+                    <span class="title">Évolution</span>
+                    <span class="percent">0%</span>
+                </div>
+                <div class="line"></div>
+            </div>
+            <div class="field_ep_number">
+                <input type="text" id="serie_name" placeholder="Entrez le nom de la serie ou films">
+            </div>
+            <div class="field_ep_number">
+                <input type="text" id="season" placeholder="Entrez la saison ou l'histoir de la serie">
+            </div>
+            <div class="field_ep_number">
+                <input type="number" id="ep_number" placeholder="Entrez le numero d'orde de l'episode">
+            </div>
+            <div class="button">
+                <button type="button" id="upload-btn">Uploader</button>
+            </div>
         </div>
     </div>
     <script>    
         let file = null;
         let isUploading = false;
+        let ep_number=null
+        let serie_name= null
+        let season = null
         
         const input = document.getElementById("input");
         const video = document.getElementById("video");
@@ -232,15 +269,17 @@
         };
 
         // Fonction corrigée pour envoyer un chunk
-        const sendChunck = async (chunck, i, filename, total_chunck) => {
+        const sendChunck = async (chunck, i, filename, total_chunck,episode_number,serie_name,season) => {
             const formData = new FormData();
             formData.append("file", chunck);
             formData.append("chunk_index", i);
             formData.append("total_chunks", total_chunck);
+            formData.append("episode_number",episode_number)
             formData.append("filename", filename);
+            formData.append('serie_name',serie_name)
+            formData.append('season',season)
             
             try {
-                console.log(`Envoi du chunk ${i + 1}/${total_chunck} pour ${filename}`);
                 
                 const res = await fetch("http://173.212.239.116:8000/upload-chunk/", {
                     method: "POST",
@@ -252,7 +291,6 @@
                 }
 
                 const result = await res.json();
-                console.log("Réponse du serveur:", result);
 
                 if (result.status === "COMPLETE") {
                     showMessage("Upload terminé avec succès!", 'success');
@@ -282,7 +320,7 @@
         };
 
         // Fonction corrigée pour uploader le fichier
-        const upload_file = async (file, progress_barre) => {
+        const upload_file = async (file, progress_barre,episode_number,serie_name, season)=> {
             if (!file) {
                 showMessage("Aucun fichier sélectionné", 'error');
                 return;
@@ -297,19 +335,22 @@
             try {
                 progress_barre.style.display = "block";
                 showMessage(`Upload en cours... ${total_chunk} chunks à envoyer`, 'info');
-                
-                for (let i = 0; i < total_chunk; i++) {
+                const last_index=localStorage.getItem(file.name)
+                for (let i =last_index? parseInt(last_index) : 0; i < total_chunk; i++) {
                     if (!isUploading) break; // Permettre l'annulation
                     
                     const chunck = file.slice(i * chunck_size, (i + 1) * chunck_size);
-                    await sendChunck(chunck, i, file.name, total_chunk);
+                    await sendChunck(chunck, i, file.name, total_chunk,episode_number,serie_name,season);
                     
                     // Mise à jour de la barre de progression
                     const progress_indicator = ((i + 1) * 100 / total_chunk);
                     line.style.width = progress_indicator + "%";
                     percent.innerHTML = `${Math.round(progress_indicator)}%`;
+                    localStorage.setItem(file.name,i)
+                    if (i === total_chunk - 1){
+                        localStorage.removeItem(file.name)
+                    }
                 }
-                
             } catch (error) {
                 console.error("Erreur pendant l'upload:", error);
                 showMessage("Erreur pendant l'upload", 'error');
@@ -320,19 +361,8 @@
         // Fonction pour traiter l'aperçu du fichier
         const process_file = (file) => {
             if (file instanceof File) {
-                const reader = new FileReader();
-                
-                reader.onloadend = (event) => {
-                    const base64 = event.target.result;
-                    video.src = base64;
-                };
-
-                reader.onerror = error => {
-                    console.error("Erreur de lecture du fichier:", error);
-                    showMessage("Erreur lors de la lecture du fichier", 'error');
-                };
-
-                reader.readAsDataURL(file);
+                const video_url=URL.createObjectURL(file)
+                video.src=video_url;
             }
         };
 
@@ -368,11 +398,33 @@
                 select_file(e);
             });
 
+            document.getElementById("ep_number").addEventListener("change",e=>{
+                ep_number=e.target.value
+            })
+
+            document.getElementById("serie_name").addEventListener('change',e=>{
+                serie_name=e.target.value
+            })
+
+            document.getElementById('season').addEventListener('change',e=>{
+                season=e.target.value
+            })
+
             // Event listener pour le bouton upload
             button.addEventListener("click", async () => {
                 if (!file) {
                     showMessage("Veuillez sélectionner un fichier", 'error');
                     return;
+                }
+
+                if(!ep_number || isNaN(ep_number)){
+                    showMessage("Veuillez entrer un numero d'episode valide", 'error');
+                    return;
+                }
+
+                if(!serie_name){
+                    showMessage('Veuillez entrer le nom de la serie','error')
+                    return
                 }
 
                 if (isUploading) {
@@ -384,7 +436,7 @@
                 button.disabled = true;
                 button.innerHTML = "Upload en cours...";
                 
-                await upload_file(file, progress_barre);
+                await upload_file(file, progress_barre,ep_number,serie_name,season);
             });
         }
 

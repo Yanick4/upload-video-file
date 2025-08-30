@@ -1,12 +1,15 @@
 import re
-from fastapi import UploadFile, Form, FastAPI, File, Request
+from fastapi import UploadFile, Form, FastAPI, File, Request,BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, JSONResponse
+
 import aiofiles
 import os
 import shutil
 import time
+from config import config
+from process import upload_file_to_bunny
 
 app= FastAPI()
 
@@ -23,6 +26,7 @@ template=Jinja2Templates(directory="templates")
 
 CHUNK_DIR = "/uploaded_chunks"
 FINAL_PATH ="/final"
+TREATMENT_PATH = config.get("root_dir")
 
 quality_order=["FHD","HD","MD","SD"]
 
@@ -42,17 +46,27 @@ def clean_video_name_regex(video_name, quality_order):
 
 os.makedirs(CHUNK_DIR, exist_ok=True)
 os.makedirs(FINAL_PATH, exist_ok=True)
+os.makedirs(TREATMENT_PATH, exist_ok=True)
 @app.post("/upload-chunk/")
 async def upload_chunk(
+    background_task:BackgroundTasks,
     file: UploadFile = File(...),
     filename: str = Form(...),
     chunk_index: int = Form(...),
-    total_chunks: int = Form(...)
+    total_chunks: int = Form(...),
+    episode_number: int = Form(...),
+    season:str = Form(...),
+    serie_name:str =Form(...),
 ):
     try:
+        season_=season if season is not None and season != "null" and season !="undefined" else ""
         file_directories=clean_video_name_regex(filename,quality_order).upper()
-        temp_file_path=os.path.join(CHUNK_DIR,file_directories)
-        final_path=os.path.join(FINAL_PATH,file_directories)
+        temp_file_path=os.path.join(
+            CHUNK_DIR,serie_name,
+            season_,
+            file_directories
+        )
+        final_path=os.path.join(FINAL_PATH,serie_name,season_,file_directories)
         os.makedirs(temp_file_path,exist_ok=True)
         os.makedirs(final_path,exist_ok=True)
         chunk_path = os.path.join(temp_file_path, f"{filename}_part_{chunk_index}")
@@ -78,6 +92,8 @@ async def upload_chunk(
                     print(f"Tentative {i+1}: Fichiers encore en cours d’utilisation. Nouvelle tentative...")
                     time.sleep(1)
 
+            serie_season_path=os.path.join(re.sub(r'\s+','_',serie_name.upper()), re.sub(r"\s+","_",season_.upper()))
+            background_task.add_task(upload_file_to_bunny,TREATMENT_PATH,output_path,episode_number,serie_season_path)
             return JSONResponse(
                 content={
                     "message": "Fichier reconstruit avec succès", 
@@ -85,7 +101,7 @@ async def upload_chunk(
                     "status":"COMPLETE"
                 },
                 status_code=200
-            )
+            ) 
 
         return JSONResponse(
             content={"message": f"Chunk {chunk_index + 1}/{total_chunks} reçu"},
